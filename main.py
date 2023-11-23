@@ -2,17 +2,12 @@ import os
 from langchain.document_loaders import TextLoader
 from langchain.text_splitter import CharacterTextSplitter
 from langchain.embeddings import OllamaEmbeddings
-from langchain.vectorstores import Pinecone
+from langchain.vectorstores import FAISS
 from langchain.chains import RetrievalQA
 from langchain.callbacks.manager import CallbackManager
 from langchain.callbacks.streaming_stdout import StreamingStdOutCallbackHandler
 from langchain.llms import Ollama
-import pinecone
 
-pinecone.init(
-    api_key=os.environ.get("PINECONE_API_KEY"),
-    environment="gcp-starter",
-)
 
 if __name__ == "__main__":
     print("Hello VectorStore!")
@@ -25,18 +20,17 @@ if __name__ == "__main__":
     print(len(texts))
 
     embeddings = OllamaEmbeddings(base_url="http://localhost:11434", model="orca-mini")
-    docsearch = Pinecone.from_documents(
-        texts,
-        embeddings,
-        index_name="langchainpinecone"
-    )
+    vectorstore = FAISS.from_documents(texts, embeddings)
+    vectorstore.save_local("faiss_index_react")
+
+    new_vectorstore = FAISS.load_local("faiss_index_react", embeddings)
 
     qa = RetrievalQA.from_chain_type(
         llm=Ollama(
             model="orca-mini", callback_manager=CallbackManager([StreamingStdOutCallbackHandler()])
         ),
         chain_type="stuff",
-        retriever=docsearch.as_retriever(),
+        retriever=new_vectorstore.as_retriever(),
         return_source_documents=True
     )
 
