@@ -1,5 +1,6 @@
 import os
 import multiprocessing
+import torch
 from langchain.document_loaders import TextLoader
 from langchain.text_splitter import CharacterTextSplitter
 from langchain.embeddings import OllamaEmbeddings
@@ -28,13 +29,21 @@ if __name__ == "__main__":
     vectorstore = FAISS()
 
     # Specify the number of GPUs to use
-    num_gpus = 2
+    num_gpus = torch.cuda.device_count()
 
     # Create a pool of processes for parallel processing
     pool = multiprocessing.Pool(processes=num_gpus)
 
+    # Calculate the number of chunks per GPU
+    chunks_per_gpu = len(texts) // num_gpus
+
     # Process the chunks in parallel using multiple GPUs
-    embeddings_list = pool.starmap(process_chunk, [(chunk, embeddings) for chunk in texts])
+    embeddings_list = []
+    for i in range(num_gpus):
+        start_idx = i * chunks_per_gpu
+        end_idx = start_idx + chunks_per_gpu if i < num_gpus - 1 else len(texts)
+        gpu_texts = texts[start_idx:end_idx]
+        embeddings_list.extend(pool.starmap(process_chunk, [(chunk, embeddings) for chunk in gpu_texts]))
 
     # Add the embeddings to the vector store
     for i, embedding in enumerate(embeddings_list):
